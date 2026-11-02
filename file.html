@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EcoPoints Rewards</title>
+<style>
+:root{--g:#16a34a;--g2:#22c55e;--dark:#0f3d27;--bg:#f0fdf4;--card:#fff;--mut:#64748b}
+*{box-sizing:border-box;margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif}
+body{background:var(--bg);color:#12281c;padding-bottom:40px}
+header{background:linear-gradient(135deg,var(--dark),var(--g));color:#fff;padding:24px 18px 60px;text-align:center}
+header h1{font-size:1.5rem}
+.balance{font-size:2.6rem;font-weight:800;margin-top:6px}
+main{max-width:900px;margin:-40px auto 0;padding:0 14px;display:grid;gap:16px}
+.card{background:var(--card);border-radius:18px;padding:18px;box-shadow:0 6px 20px #0001}
+h2{font-size:1.1rem;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.stat b{display:block;font-size:1.5rem;color:var(--g)}
+.stat span{font-size:.75rem;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.waste{border:2px solid #e2e8f0;border-radius:14px;padding:12px;text-align:center;cursor:pointer;background:#fff;transition:.15s}
+.waste:hover,.waste.sel{border-color:var(--g2);background:#f0fdf4;transform:translateY(-2px)}
+.waste .ic{font-size:2rem}.waste small{color:var(--mut);display:block}
+button,.btn{background:var(--g);color:#fff;border:0;border-radius:12px;padding:12px 16px;font-size:.95rem;font-weight:600;cursor:pointer;display:inline-block}
+button.alt,.btn.alt{background:#e2e8f0;color:#12281c}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+video,#preview{width:100%;max-height:340px;object-fit:cover;border-radius:14px;background:#000;display:none;margin-top:10px}
+.scanbox{position:relative}
+.scanbox.on::after{content:"";position:absolute;left:15%;right:15%;top:45%;height:3px;background:#22c55e;box-shadow:0 0 12px #22c55e;animation:s 1.6s infinite alternate;border-radius:3px}
+@keyframes s{to{transform:translateY(60px)}}
+input[type=number]{padding:10px;border:2px solid #e2e8f0;border-radius:10px;width:90px;font-size:1rem}
+.msg{margin-top:10px;padding:10px;border-radius:10px;background:#ecfdf5;font-size:.9rem;display:none}
+.msg.err{background:#fef2f2;color:#b91c1c}
+.reward{display:flex;align-items:center;gap:12px;padding:12px;border:2px solid #e2e8f0;border-radius:14px;margin-bottom:10px}
+.reward .ic{font-size:2.2rem}.reward div{flex:1}.reward small{color:var(--mut)}
+.bar{height:8px;background:#e2e8f0;border-radius:8px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--g2)}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+td,th{padding:8px;border-bottom:1px solid #e2e8f0;text-align:left}
+.pill{background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:99px;font-size:.75rem}
+.pill.ok{background:#dcfce7;color:#166534}
+</style>
+</head>
+<body>
+<header>
+  <h1>♻️ EcoPoints Rewards</h1>
+  <div>Your claimed points</div>
+  <div class="balance" id="balance">0</div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="stats">
+      <div class="stat"><b id="sPending">0</b><span>Potential points to claim</span></div>
+      <div class="stat"><b id="sItems">0</b><span>Waste items logged</span></div>
+      <div class="stat"><b id="sClaims">0</b><span>Claims made</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>1. Choose waste type &amp; possible points</h2>
+    <div class="grid" id="wasteGrid"></div>
+    <div class="row" style="align-items:center">
+      <label>Quantity (kg / pcs): <input type="number" id="qty" min="1" value="1"></label>
+      <strong id="possible">Possible points: 0</strong>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Capture or upload waste photo</h2>
+    <video id="camVideo" playsinline muted></video>
+    <img id="preview" alt="Waste preview">
+    <canvas id="camCanvas" hidden></canvas>
+    <div class="row">
+      <button id="btnCam">📷 Open camera</button>
+      <button id="btnSnap" class="alt" disabled>Capture</button>
+      <label class="btn alt">⬆️ Upload / take photo
+        <input type="file" id="fileWaste" accept="image/*" capture="environment" hidden>
+      </label>
+      <button id="btnAdd" disabled>Add to potential points</button>
+    </div>
+    <div class="msg" id="msgWaste"></div>
+  </section>
+
+  <section class="card">
+    <h2>3. Scan QR code to claim points</h2>
+    <p style="font-size:.85rem;color:var(--mut)">Scan the drop-off station QR (text must start with <code>ECO-</code>, e.g. <code>ECO-STATION-001</code>).</p>
+    <div class="scanbox" id="scanbox"><video id="qrVideo" playsinline muted></video></div>
+    <canvas id="qrCanvas" hidden></canvas>
+    <div class="row">
+      <button id="btnScan">📱 Start QR scanner</button>
+      <button id="btnStop" class="alt" disabled>Stop</button>
+      <label class="btn alt">🖼️ Scan QR from image
+        <input type="file" id="fileQR" accept="image/*" hidden>
+      </label>
+    </div>
+    <div class="row"><input id="manual" placeholder="Or type code e.g. ECO-STATION-001" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:10px"><button class="alt" id="btnManual">Submit</button></div>
+    <div class="msg" id="msgQR"></div>
+  </section>
+
+  <section class="card">
+    <h2>🎁 Rewards</h2>
+    <div id="rewards"></div>
+  </section>
+
+  <section class="card">
+    <h2>Waste log</h2>
+    <table><thead><tr><th>Waste</th><th>Qty</th><th>Points</th><th>Status</th></tr></thead><tbody id="log"></tbody></table>
+  </section>
+</main>
+
+<script>
+/* ---------- OOP MODEL ---------- */
+class WasteType {
+  constructor(id, name, icon, pointsPerUnit) {
+    this.id = id; this.name = name; this.icon = icon; this.pointsPerUnit = pointsPerUnit;
+  }
+  calculate(qty) { return this.pointsPerUnit * qty; }
+}
+
+class WasteEntry {
+  constructor(type, qty, image) {
+    this.type = type; this.qty = qty; this.image = image;
+    this.points = type.calculate(qty);
+    this.claimed = false;
+  }
+}
+
+class Reward {
+  constructor(name, icon, cost, desc) {
+    this.name = name; this.icon = icon; this.cost = cost; this.desc = desc;
+  }
+  canRedeem(points) { return points >= this.cost; }
+}
+
+class UserAccount {
+  constructor() {
+    this.balance = 0; this.entries = []; this.claims = 0;
+  }
+  addEntry(entry) { this.entries.push(entry); }
+  get pendingPoints() { return this.entries.filter(e => !e.claimed).reduce((s, e) => s + e.points, 0); }
+  claimAll() {
+    const pts = this.pendingPoints;
+    if (!pts) return 0;
+    this.entries.forEach(e => e.claimed = true);
+    this.balance += pts; this.claims++;
+    return pts;
+  }
+  redeem(reward) {
+    if (!reward.canRedeem(this.balance)) return false;
+    this.balance -= reward.cost; return true;
+  }
+  save() { localStorage.setItem("ecoUser", JSON.stringify({b:this.balance,c:this.claims,e:this.entries.map(e=>({t:e.type.id,q:e.qty,c:e.claimed}))})); }
+}
+
+/* ---------- CAMERA (waste photos) ---------- */
+class CameraCapture {
+  constructor(video, canvas) { this.video = video; this.canvas = canvas; this.stream = null; }
+  async start() {
+    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+    this.video.srcObject = this.stream; this.video.style.display = "block"; await this.video.play();
+  }
+  snap() {
+    this.canvas.width = this.video.videoWidth; this.canvas.height = this.video.videoHeight;
+    this.canvas.getContext("2d").drawImage(this.video, 0, 0);
+    return this.canvas.toDataURL("image/jpeg", .8);
+  }
+  stop() {
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = null; this.video.style.display = "none";
+  }
+}
+
+/* ---------- QR SCANNER ---------- */
+class QRScanner {
+  constructor(video, canvas, onResult) {
+    this.video = video; this.canvas = canvas; this.onResult = onResult;
+    this.stream = null; this.running = false; this.detector = null;
+    if ("BarcodeDetector" in window) {
+      try { this.detector = new BarcodeDetector({ formats: ["qr_code"] }); } catch (e) {}
+    }
+  }
+  loadJsQR() {
+    return new Promise((res, rej) => {
+      if (window.jsQR) return res();
+      const s = document.createElement("script");
+      s.src = "[cdn.jsdelivr.net](https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js)";
+      s.onload = res; s.onerror = () => rej(new Error("Could not load QR library (check internet)"));
+      document.head.appendChild(s);
+    });
+  }
+  async decode(source, w, h) {
+    if (this.detector) {
+      try { const r = await this.detector.detect(source); if (r.length) return r[0].rawValue; } catch (e) {}
+    }
+    if (window.jsQR) {
+      this.canvas.width = w; this.canvas.height = h;
+      const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(source, 0, 0, w, h);
+      const d = ctx.getImageData(0, 0, w, h);
+      const c = jsQR(d.data, w, h, { inversionAttempts: "attemptBoth" });
+      if (c) return c.data;
+    }
+    return null;
+  }
+  async start() {
+    if (!this.detector) await this.loadJsQR();
+    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+    this.video.srcObject = this.stream; this.video.style.display = "block";
+    await this.video.play(); this.running = true; this.loop();
+  }
+  async loop() {
+    if (!this.running) return;
+    if (this.video.readyState >= 2 && this.video.videoWidth) {
+      const code = await this.decode(this.video, this.video.videoWidth, this.video.videoHeight);
+      if (code) { this.stop(); this.onResult(code); return; }
+    }
+    requestAnimationFrame(() => this.loop());
+  }
+  async scanImage(file) {
+    if (!this.detector) await this.loadJsQR();
+    const img = new Image(); img.src = URL.createObjectURL(file);
+    await img.decode();
+    return this.decode(img, img.naturalWidth, img.naturalHeight);
+  }
+  stop() {
+    this.running = false;
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = null; this.video.style.display = "none";
+  }
+}
+
+/* ---------- APP ---------- */
+class EcoApp {
+  constructor() {
+    this.wasteTypes = [
+      new WasteType("plastic", "Plastic Bottles", "🧴", 5),
+      new WasteType("paper", "Paper / Cardboard", "📦", 3),
+      new WasteType("glass", "Glass", "🍾", 8),
+      new WasteType("metal", "Metal Cans", "🥫", 10),
+      new WasteType("ewaste", "E-Waste", "🔋", 20),
+      new WasteType("organic", "Organic", "🍌", 2)
+    ];
+    this.rewards = [
+      new Reward("Groceries", "🛒", 300, "Grocery pack voucher"),
+      new Reward("Rice", "🍚", 150, "1 sack (5kg) of rice")
+    ];
+    this.user = new UserAccount();
+    this.selected = this.wasteTypes[0];
+    this.image = null;
+    this.$ = id => document.getElementById(id);
+    this.camera = new CameraCapture(this.$("camVideo"), this.$("camCanvas"));
+    this.scanner = new QRScanner(this.$("qrVideo"), this.$("qrCanvas"), code => this.handleQR(code));
+    this.load(); this.bind(); this.render();
+  }
+  load() {
+    try {
+      const d = JSON.parse(localStorage.getItem("ecoUser"));
+      if (!d) return;
+      this.user.balance = d.b; this.user.claims = d.c;
+      d.e.forEach(x => { const t = this.wasteTypes.find(w => w.id === x.t); const e = new WasteEntry(t, x.q, null); e.claimed = x.c; this.user.addEntry(e); });
+    } catch (e) {}
+  }
+  msg(id, text, err) { const m = this.$(id); m.textContent = text; m.className = "msg" + (err ? " err" : ""); m.style.display = "block"; }
+  bind() {
+    this.$("qty").oninput = () => this.render();
+    this.$("btnCam").onclick = async () => {
+      try { await this.camera.start(); this.$("btnSnap").disabled = false; this.$("preview").style.display = "none"; }
+      catch (e) { this.msg("msgWaste", "Camera unavailable: " + e.message + ". Use Upload instead.", true); }
+    };
+    this.$("btnSnap").onclick = () => { this.setImage(this.camera.snap()); this.camera.stop(); this.$("btnSnap").disabled = true; };
+    this.$("fileWaste").onchange = e => {
+      const f = e.target.files[0]; if (!f) return;
+      const r = new FileReader(); r.onload = () => this.setImage(r.result); r.readAsDataURL(f);
+    };
+    this.$("btnAdd").onclick = () => this.addWaste();
+    this.$("btnScan").onclick = async () => {
+      try { this.$("btnScan").disabled = true; this.$("btnStop").disabled = false; this.$("scanbox").classList.add("on"); await this.scanner.start(); this.msg("msgQR", "Point the camera at the QR code..."); }
+      catch (e) { this.stopUI(); this.msg("msgQR", "Cannot start scanner: " + e.message, true); }
+    };
+    this.$("btnStop").onclick = () => { this.scanner.stop(); this.stopUI(); };
+    this.$("fileQR").onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { const c = await this.scanner.scanImage(f); c ? this.handleQR(c) : this.msg("msgQR", "No QR code found in image.", true); }
+      catch (err) { this.msg("msgQR", err.message, true); }
+    };
+    this.$("btnManual").onclick = () => { const v = this.$("manual").value.trim(); if (v) this.handleQR(v); };
+  }
+  stopUI() { this.$("btnScan").disabled = false; this.$("btnStop").disabled = true; this.$("scanbox").classList.remove("on"); }
+  setImage(src) {
+    this.image = src; const p = this.$("preview"); p.src = src; p.style.display = "block";
+    this.$("btnAdd").disabled = false; this.msg("msgWaste", "Photo ready. Press 'Add to potential points'.");
+  }
+  addWaste() {
+    const qty = Math.max(1, parseInt(this.$("qty").value) || 1);
+    this.user.addEntry(new WasteEntry(this.selected, qty, this.image));
+    this.image = null; this.$("preview").style.display = "none"; this.$("btnAdd").disabled = true;
+    this.user.save(); this.msg("msgWaste", "Added! Scan a station QR code to claim your points."); this.render();
+  }
+  handleQR(code) {
+    this.stopUI();
+    if (!code.toUpperCase().startsWith("ECO-")) return this.msg("msgQR", `Invalid QR: "${code}". Not an EcoPoints station.`, true);
+    const pts = this.user.claimAll();
+    if (!pts) return this.msg("msgQR", `Station ${code} recognised, but you have no potential points. Add waste first.`, true);
+    this.user.save(); this.msg("msgQR", `✅ Station ${code}: claimed ${pts} points!`); this.render();
+  }
+  render() {
+    const qty = Math.max(1, parseInt(this.$("qty").value) || 1);
+    this.$("wasteGrid").innerHTML = this.wasteTypes.map(w =>
+      `<div class="waste ${w === this.selected ? "sel" : ""}" data-id="${w.id}"><div class="ic">${w.icon}</div><b>${w.name}</b><small>${w.pointsPerUnit} pts / unit</small></div>`).join("");
+    this.$("wasteGrid").querySelectorAll(".waste").forEach(el => el.onclick = () => { this.selected = this.wasteTypes.find(w => w.id === el.dataset.id); this.render(); });
+    this.$("possible").textContent = `Possible points: ${this.selected.calculate(qty)}`;
+    this.$("balance").textContent = this.user.balance;
+    this.$("sPending").textContent = this.user.pendingPoints;
+    this.$("sItems").textContent = this.user.entries.length;
+    this.$("sClaims").textContent = this.user.claims;
+    const total = this.user.balance + this.user.pendingPoints;
+    this.$("rewards").innerHTML = this.rewards.map((r, i) => {
+      const pct = Math.min(100, Math.round(total / r.cost * 100));
+      return `<div class="reward"><span class="ic">${r.icon}</span><div><b>${r.name}</b> · ${r.cost} pts<br><small>${r.desc}</small>
+      <div class="bar"><i style="width:${pct}%"></i></div><small>${pct}% with potential points</small></div>
+      <button data-i="${i}" ${r.canRedeem(this.user.balance) ? "" : "disabled"}>Redeem</button></div>`;
+    }).join("");
+    this.$("rewards").querySelectorAll("button").forEach(b => b.onclick = () => {
+      const r = this.rewards[b.dataset.i];
+      if (this.user.redeem(r)) { this.user.save(); alert(`🎉 You redeemed: ${r.name}!`); this.render(); }
+    });
+    this.$("log").innerHTML = this.user.entries.slice().reverse().map(e =>
+      `<tr><td>${e.type.icon} ${e.type.name}</td><td>${e.qty}</td><td>${e.points}</td><td><span class="pill ${e.claimed ? "ok" : ""}">${e.claimed ? "Claimed" : "Pending"}</span></td></tr>`).join("")
+      || `<tr><td colspan="4" style="color:#64748b">No waste logged yet.</td></tr>`;
+  }
+}
+new EcoApp();
+</script>
+</body>
+</html>
